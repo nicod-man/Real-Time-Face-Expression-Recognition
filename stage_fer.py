@@ -1,6 +1,3 @@
-
-
-from camera import VideoCamera
 from model import FacialExpressionModel
 from tensorflow import keras
 from keras.preprocessing.image import ImageDataGenerator, load_img, img_to_array
@@ -12,10 +9,10 @@ import argparse
 import numpy as np
 import cv2
 
-datadir = 'dataset'
-modelsdir = os.getcwd()
 
-model_loaded = FacialExpressionModel("model.json", "model_weights.h5")
+modelsdir = 'models'
+
+model_loaded = FacialExpressionModel("models/model.json", "models/fer.h5")
 facec = cv2.CascadeClassifier('haarcascade_frontalface_default.xml')
 font = cv2.FONT_HERSHEY_SIMPLEX
 
@@ -41,19 +38,10 @@ def predictImage(model, imagefile):
     else:
         return (0,'error')
 
-
-    # inp = inputImage(imagefile)
-    # if inp is not None:
-    #     pr = model.predict(inp)
-    #     return (np.max(pr), classnames[np.argmax(pr)])
-    # else:
-    #     return (0, 'error')
-
 """
 Load an image and return input data for the network
 """
 
-# , target_size=(height, width)
 def inputImage(imagefile):
     try:
         gray = cv2.imread(imagefile, IMREAD_GRAYSCALE)
