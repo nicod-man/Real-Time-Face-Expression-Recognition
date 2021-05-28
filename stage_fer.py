@@ -1,37 +1,26 @@
-#from flask import Flask, render_template, Response
+
+
 from camera import VideoCamera
 from model import FacialExpressionModel
-from keras.models import load_model
-
-#import tensorflow as tf
+from tensorflow import keras
+from keras.preprocessing.image import ImageDataGenerator, load_img, img_to_array
+from cv2 import *
 import keras
 import os, sys, time, socket
-import threading 
+import threading
 import argparse
 import numpy as np
 import cv2
 
-
-
-#print("Tensorflow version %s" %tf.__version__)
-print("Keras version %s" %keras.__version__)
-
-
 datadir = 'dataset'
 modelsdir = os.getcwd()
 
-model = FacialExpressionModel("model.json", "model_weights.h5")
+model_loaded = FacialExpressionModel("model.json", "model_weights.h5")
 facec = cv2.CascadeClassifier('haarcascade_frontalface_default.xml')
 font = cv2.FONT_HERSHEY_SIMPLEX
 
 
-classnames = ["Angry", "Disgust", "Fear", "Happy",
-              "Neutral", "Sad", "Surprise"]
-
 default_server_port = 9250
-#height = 1280
-#width = 959
-
 
 
 """
@@ -41,15 +30,13 @@ def predictImage(model, imagefile):
     global classnames
 
     inp = inputImage(imagefile)
-    print(inp)
     if inp is not None:
-        gray_fr = cv2.cvtColor(inp, cv2.COLOR_BGR2GRAY)
-        faces = facec.detectMultiScale(gray_fr, 1.3, 5)
+        faces = facec.detectMultiScale(inp, 1.3, 5)
 
         for (x, y, w, h) in faces:
-            fc = gray_fr[y:y + h, x:x + w]
+            fc = inp[y:y + h, x:x + w]
             roi = cv2.resize(fc, (48, 48))
-            probability, emotion = model.predict_emotion(roi[np.newaxis, :, :, np.newaxis])
+            probability, emotion = model_loaded.predict_emotion(roi[np.newaxis, :, :, np.newaxis])
             return (probability, emotion)
     else:
         return (0,'error')
@@ -69,10 +56,9 @@ Load an image and return input data for the network
 # , target_size=(height, width)
 def inputImage(imagefile):
     try:
-        img = load_img(imagefile, color_mode="rgb")
-        arr = img_to_array(img) / 255
-        inp = np.array([arr])  # Convert single image to a batch.
-        return inp
+        gray = cv2.imread(imagefile, IMREAD_GRAYSCALE)
+        gray = np.array(gray,dtype='uint8')
+        return gray
     except:
         return None
 
@@ -85,7 +71,7 @@ def loadModel(modelname):
     global modelsdir
     filename = os.path.join(modelsdir, '%s.h5' %modelname)
     try:
-        model = load_model(filename)
+        model = keras.models.load_model(filename)
         print("\nModel loaded successfully from file %s\n" %filename)
     except OSError:    
         print("\nModel file %s not found!!!\n" %modelname)
@@ -172,39 +158,15 @@ class ModelServer(threading.Thread):
                         self.received = data
                         print('Received: %s' % data)
                         v = data.split(' ')
-                        if v[0] == 'REQ':
-                            self.connection.send('ACK\n\r'.encode('UTF-8'))
-                        elif v[0] == 'GETRESULT':
-                            ressend = (res + '\n\r').encode('UTF-8')
-                            self.connection.send(ressend)
-                        elif v[0] == 'EVAL' and len(v) > 1:
-                            print('Eval image [%s]' % v[1])
+                        if v[0] == 'EVAL' and len(v) > 1:
+                            print("\n-----Predicting image------\n")
                             (p, c) = predictImage(self.model, v[1])
                             print("Predicted: %s, prob: %.3f" % (c, p))
                             res = "%s %.3f" % (c, p)
                             ressend = (res + '\n\r').encode('UTF-8')
                             self.connection.send(ressend)
-                        elif v[0] == 'RGB' and len(v) >= 3:
-                            imgwidth = int(v[1])
-                            imgheight = int(v[2])
-                            imgsize = imgwidth * imgheight * 3
-                            print("RGB image size: %d" % imgsize)
-                            buf = self.recvall(imgsize, buf)
-                            if buf is not None:
-                                print("Image received size: %d " % (len(buf)))
-                                a = np.fromstring(buf, dtype='uint8')
-                                a = a.reshape((imgheight, imgwidth, 3))
-                                a = a / 255.0
-                                inp = np.array([a])
-                                pr = model.predict(inp)
-                                (p, c) = (np.max(pr), classnames[np.argmax(pr)])
-                                print("Predicted: %s, prob: %.3f" % (c, p))
-                                res = "%s %.3f" % (c, p)
-                                ressend = (res + '\n\r').encode('UTF-8')
-                                self.connection.send(ressend)
                         else:
                             print('Received: %s' % data)
-
                     elif (data == None or data == ""):
                         break
             finally:
@@ -244,16 +206,22 @@ if __name__=='__main__':
                         help='Start in server mode')
     parser.add_argument('-server_port', type=int, default=default_server_port, 
                         help='server port (default: %d)' %default_server_port)
+    parser.add_argument("-predict", type=str, default=None,
+                        help="Image file to predict")
 
     args = parser.parse_args()
 
     if (args.modelname == None):
         print("Please specify a model name and an operation to perform.")
         sys.exit(1)
-
     elif (args.server):
         model = loadModel(args.modelname)
         startServer(args.server_port, model)
+    elif (args.predict != None):
+        print("\n -----Predicting image------\n")
+        model = loadModel(args.modelname)
+        (p, c) = predictImage(model, args.predict)
+        print("Predicted: %s, prob: %.3f" % (c, p))
     else:
         print("Please specify a model name and an operation to perform.")
         sys.exit(1)

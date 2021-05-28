@@ -19,4 +19,11 @@ class FacialExpressionModel(object):
         self.loaded_model._make_predict_function()
 
     def predict_emotion(self, img):
-        return (self.loaded_model.predict(img), FacialExpressionModel.EMOTIONS_LIST[np.argmax(self.preds)])
+        prob = self.loaded_model.predict(img)
+        norm = np.linalg.norm(prob)
+        prob_norm = prob/norm
+        # np.set_printoptions(suppress=True)
+        # print(prob)
+        # print("\n")
+        # print(prob_norm)
+        return (np.max(prob_norm), FacialExpressionModel.EMOTIONS_LIST[np.argmax(prob_norm)])
