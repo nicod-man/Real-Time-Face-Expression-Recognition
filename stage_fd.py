@@ -154,7 +154,7 @@ class ModelServer(threading.Thread):
 
                             # Without resizing the window, it will fit the whole screen
                             cv2.namedWindow("detected", cv2.WINDOW_NORMAL)
-                            cv2.resizeWindow("detected", (959, 1280))
+                            cv2.resizeWindow("detected", 959, 1280)
 
                             cv2.imshow("detected", people_detected)
                             cv2.waitKey(6000)
