@@ -210,6 +210,7 @@ if __name__=='__main__':
         model = loadModel(args.modelname)
         (p, c) = predictImage(model, args.predict)
         print("Predicted: %s, prob: %.3f" % (c, p))
+
     else:
         print("Please specify a model name and an operation to perform.")
         sys.exit(1)

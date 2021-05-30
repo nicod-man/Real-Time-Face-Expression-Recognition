@@ -15,7 +15,7 @@ model_loaded = FacialExpressionModel("models/model.json", "models/fer.h5")
 facec = cv2.CascadeClassifier('haarcascade_frontalface_default.xml')
 font = cv2.FONT_HERSHEY_SIMPLEX
 
-default_server_port = 9250
+default_server_port = 9251
 
 """
 Predict class of an image
