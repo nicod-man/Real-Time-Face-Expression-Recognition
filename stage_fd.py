@@ -25,7 +25,11 @@ Predict class of an image
 def detectPeople(model, imagefile):
     global classnames
 
-    inp = inputImage(imagefile)
+    if isinstance(imagefile, str):
+        inp = inputImage(imagefile)
+    else:
+        inp = imagefile
+
     if inp is not None:
         faces = facec.detectMultiScale(inp, 1.3, 5)
 
@@ -163,6 +167,42 @@ class ModelServer(threading.Thread):
                             res = "People detected!"
                             ressend = (res + '\n\r').encode('UTF-8')
                             self.connection.send(ressend)
+                        elif v[0]=='RGB' and len(v) >= 3:
+                            print("\n---------Predicting faces----------\n")
+
+                            img_width = int(v[1])
+                            img_height = int(v[2])
+                            img_size = img_height * img_width * 3
+
+                            print("RGB image size: %d" %img_size)
+                            buf = self.recvall(img_size, buf)
+
+                            if buf is not None:
+                                print("Image received with size: %d" %len(buf))
+                                img_rcv = np.fromstring(buf, dtype='uint8')
+                                img_rcv = img_rcv.reshape((img_height, img_width, 3))
+
+                                # The model does expect as input an image of shape (width,height).
+                                # An RGB image has by definition 3 channels -> shape (widht,height,3)
+                                gray = cv2.cvtColor(img_rcv, cv2.COLOR_BGR2GRAY)
+
+                                # Image as array
+                                inp = np.array(gray)
+
+                                # Prediction
+                                people_detected = detectPeople(self.model, inp)
+                                # people_detected_colored = cv2.cvtColor(people_detected, cv2.COLOR_GRAY2RGB)
+                                # Without resizing the window, it will fit the whole screen
+                                cv2.namedWindow("detected", cv2.WINDOW_NORMAL)
+                                cv2.resizeWindow("detected", img_width, img_height)
+
+                                cv2.imshow("detected", people_detected)
+                                cv2.waitKey(6000)
+                                cv2.destroyAllWindows()
+
+                                res = "People detected!"
+                                ressend = (res + '\n\r').encode('UTF-8')
+                                self.connection.send(ressend)
                         else:
                             print('Received: %s' % data)
                     elif (data == None or data == ""):

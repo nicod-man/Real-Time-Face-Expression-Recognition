@@ -17,16 +17,20 @@ facec = cv2.CascadeClassifier('haarcascade_frontalface_default.xml')
 font = cv2.FONT_HERSHEY_SIMPLEX
 
 
-default_server_port = 9250
+default_server_port = 9253
 
 
 """
 Predict class of an image
 """
-def predictImage(model, imagefile):
+def predictImage(imagefile):
     global classnames
 
-    inp = inputImage(imagefile)
+    if isinstance(imagefile, str):
+        inp = inputImage(imagefile)
+    else:
+        inp = imagefile
+
     if inp is not None:
         faces = facec.detectMultiScale(inp, 1.3, 5)
 
@@ -37,6 +41,7 @@ def predictImage(model, imagefile):
             return (probability, emotion)
     else:
         return (0,'error')
+
 
 """
 Load an image and return input data for the network
@@ -83,7 +88,7 @@ class ModelServer(threading.Thread):
         self.sock.listen(1)
 
         self.model = model
-
+        self.image = None
 
         print("Server running on port %d" %port)
         
@@ -117,7 +122,7 @@ class ModelServer(threading.Thread):
 
     def run(self):
 
-        imgsize = -1
+
         res = 'none 0.0'
         while (self.dorun):
             self.connect()  # wait for connection
@@ -146,13 +151,45 @@ class ModelServer(threading.Thread):
                         self.received = data
                         print('Received: %s' % data)
                         v = data.split(' ')
+
                         if v[0] == 'EVAL' and len(v) > 1:
-                            print("\n-----Predicting image------\n")
-                            (p, c) = predictImage(self.model, v[1])
+                            print("\n-----Predicting emotion------\n")
+                            (p, c) = predictImage(v[1])
                             print("Predicted: %s, prob: %.3f" % (c, p))
                             res = "%s %.3f" % (c, p)
                             ressend = (res + '\n\r').encode('UTF-8')
                             self.connection.send(ressend)
+
+                        elif v[0]=='RGB' and len(v) >= 3:
+                            print("\n---------Predicting emotion----------\n")
+
+                            img_width = int(v[1])
+                            img_height = int(v[2])
+                            img_size = img_height * img_width * 3
+
+                            print("RGB image size: %d" %img_size)
+                            buf = self.recvall(img_size, buf)
+
+                            if buf is not None:
+                                print("Image received with size: %d" %len(buf))
+                                img_rcv = np.fromstring(buf, dtype='uint8')
+                                img_rcv = img_rcv.reshape((img_height, img_width, 3))
+
+                                # The model does expect as input an image of shape (width,height).
+                                # An RGB image has by definition 3 channels -> shape (widht,height,3)
+                                gray = cv2.cvtColor(img_rcv,cv2.COLOR_BGR2GRAY)
+
+                                # Image as array
+                                inp = np.array(gray)
+
+                                # Prediction
+                                (p, c) = predictImage(inp)
+
+                                print("Predicted: %s, prob: %.3f" % (c, p))
+                                res = "%s %.3f" % (c, p)
+                                ressend = (res + '\n\r').encode('UTF-8')
+                                self.connection.send(ressend)
+
                         else:
                             print('Received: %s' % data)
                     elif (data == None or data == ""):
@@ -210,7 +247,6 @@ if __name__=='__main__':
         model = loadModel(args.modelname)
         (p, c) = predictImage(model, args.predict)
         print("Predicted: %s, prob: %.3f" % (c, p))
-
     else:
         print("Please specify a model name and an operation to perform.")
         sys.exit(1)
