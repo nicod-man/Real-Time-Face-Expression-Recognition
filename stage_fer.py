@@ -24,7 +24,6 @@ default_server_port = 9253
 Predict class of an image
 """
 def predictImage(imagefile):
-    global classnames
 
     if isinstance(imagefile, str):
         inp = inputImage(imagefile)
@@ -32,16 +31,25 @@ def predictImage(imagefile):
         inp = imagefile
 
     if inp is not None:
+
+        # cv2.namedWindow("detected", cv2.WINDOW_NORMAL)
+        # cv2.resizeWindow("detected", 640,480)
+        #
+        # cv2.imshow("detected", inp)
+        # cv2.waitKey(6000)
+        # cv2.destroyAllWindows()
         faces = facec.detectMultiScale(inp, 1.3, 5)
 
+        if (len(faces) == 0):
+            print("No one has been detected")
+            return (0, 'noface')
         for (x, y, w, h) in faces:
             fc = inp[y:y + h, x:x + w]
             roi = cv2.resize(fc, (48, 48))
             probability, emotion = model_loaded.predict_emotion(roi[np.newaxis, :, :, np.newaxis])
             return (probability, emotion)
     else:
-        return (0,'error')
-
+        return (0, 'error')
 
 """
 Load an image and return input data for the network
@@ -80,7 +88,7 @@ class ModelServer(threading.Thread):
         # Create a TCP/IP socket
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self.sock.settimeout(3) # timeout when listening (exit with CTRL+C)
+        self.sock.settimeout(10) # timeout when listening (exit with CTRL+C)
         
         # Bind the socket to the port
         server_address = ('', port)
@@ -152,7 +160,10 @@ class ModelServer(threading.Thread):
                         print('Received: %s' % data)
                         v = data.split(' ')
 
-                        if v[0] == 'EVAL' and len(v) > 1:
+                        if v[0]=='GETRESULT':
+                            ressend = (res + '\n\r').encode('UTF-8')
+                            self.connection.send(ressend)
+                        elif v[0] == 'EVAL' and len(v) > 1:
                             print("\n-----Predicting emotion------\n")
                             (p, c) = predictImage(v[1])
                             print("Predicted: %s, prob: %.3f" % (c, p))
@@ -178,17 +189,23 @@ class ModelServer(threading.Thread):
                                 # The model does expect as input an image of shape (width,height).
                                 # An RGB image has by definition 3 channels -> shape (widht,height,3)
                                 gray = cv2.cvtColor(img_rcv,cv2.COLOR_BGR2GRAY)
+                                if (gray is None):
+                                    print("GRAY IS NONE")
 
                                 # Image as array
                                 inp = np.array(gray)
+                                if (inp is None):
+                                    print("INP IS NONE")
 
-                                # Prediction
-                                (p, c) = predictImage(inp)
-
-                                print("Predicted: %s, prob: %.3f" % (c, p))
-                                res = "%s %.3f" % (c, p)
-                                ressend = (res + '\n\r').encode('UTF-8')
-                                self.connection.send(ressend)
+                                try:
+                                    # Prediction
+                                    (probability, emotion) = predictImage(inp)
+                                    print("Predicted: %s, prob: %.3f" % (emotion, probability))
+                                    res = "%s %.3f" % (emotion, probability)
+                                    ressend = (res + '\n\r').encode('UTF-8')
+                                    self.connection.send(ressend)
+                                except Exception as e:
+                                    print("Impossible to read the input data. Excepion is %s" %e)
 
                         else:
                             print('Received: %s' % data)

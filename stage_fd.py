@@ -15,15 +15,14 @@ model_loaded = FacialExpressionModel("models/model.json", "models/fer.h5")
 facec = cv2.CascadeClassifier('haarcascade_frontalface_default.xml')
 font = cv2.FONT_HERSHEY_SIMPLEX
 
-default_server_port = 9251
+default_server_port = 9989
 
 """
 Predict class of an image
 """
 
 
-def detectPeople(model, imagefile):
-    global classnames
+def detectPeople(imagefile):
 
     if isinstance(imagefile, str):
         inp = inputImage(imagefile)
@@ -33,12 +32,13 @@ def detectPeople(model, imagefile):
     if inp is not None:
         faces = facec.detectMultiScale(inp, 1.3, 5)
 
-        for (x, y, w, h) in faces:
-            cv2.rectangle(inp, (x, y), (x + w, y + h), (255, 0, 0), 2)
+        if (len(faces) > 0):
+            return len(faces)
+        else:
+            return 0
 
-        return inp
     else:
-        return (0, 'error')
+        return -1
 
 
 """
@@ -152,9 +152,15 @@ class ModelServer(threading.Thread):
                         self.received = data
                         print('Received: %s' % data)
                         v = data.split(' ')
+
+                        if v[0]=='GETRESULT':
+                            ressend = (res + '\n\r').encode('UTF-8')
+                            self.connection.send(ressend)
+
                         if v[0] == 'EVAL' and len(v) > 1:
-                            print("\n-----Detecting people------\n")
-                            people_detected = detectPeople(self.model, v[1])
+                            print("\n-----Detecting people faces------\n")
+                            print("It returns the number of faces detected.\n")
+                            people_detected = detectPeople(v[1])
 
                             # Without resizing the window, it will fit the whole screen
                             cv2.namedWindow("detected", cv2.WINDOW_NORMAL)
@@ -190,17 +196,9 @@ class ModelServer(threading.Thread):
                                 inp = np.array(gray)
 
                                 # Prediction
-                                people_detected = detectPeople(self.model, inp)
-                                # people_detected_colored = cv2.cvtColor(people_detected, cv2.COLOR_GRAY2RGB)
-                                # Without resizing the window, it will fit the whole screen
-                                cv2.namedWindow("detected", cv2.WINDOW_NORMAL)
-                                cv2.resizeWindow("detected", img_width, img_height)
-
-                                cv2.imshow("detected", people_detected)
-                                cv2.waitKey(6000)
-                                cv2.destroyAllWindows()
-
-                                res = "People detected!"
+                                people_detected = detectPeople(inp)
+                                print("Detected ",people_detected," people.")
+                                res = ""+ str(people_detected)
                                 ressend = (res + '\n\r').encode('UTF-8')
                                 self.connection.send(ressend)
                         else:
